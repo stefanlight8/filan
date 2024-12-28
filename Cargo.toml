@@ -1,7 +1,4 @@
 [package]
 name = "filan"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
-
-[dependencies]
-walkdir = "2.5.0"
