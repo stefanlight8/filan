@@ -1,5 +1,6 @@
-use std::fs::read_dir;
+use std::fs::{read_dir, read_link};
 use std::io::Error;
+use std::os::unix::fs::FileTypeExt;
 use std::path::PathBuf;
 
 pub fn walk_dir(path: PathBuf) -> Result<Vec<PathBuf>, Error> {
@@ -7,12 +8,27 @@ pub fn walk_dir(path: PathBuf) -> Result<Vec<PathBuf>, Error> {
     let mut visit = vec![path];
     while let Some(path) = visit.pop() {
         for dir in read_dir(path)? {
-            let entry = dir?;
-            let file_type = entry.file_type()?;
-            if file_type.is_file() {
-                files.push(entry.path());
-            } else {
-                visit.push(entry.path())
+            match dir {
+                Ok(entry) => {
+                    let file_type = entry.file_type()?;
+                    if file_type.is_file() {
+                        files.push(entry.path());
+                    } else if file_type.is_symlink() {
+                        match read_link(entry.path()) {
+                            Ok(path) => {
+                                if !path.exists() || !file_type.is_block_device() {
+                                    println!("{:?}", path);
+                                    continue;
+                                }
+                                visit.push(path);
+                            },
+                            Err(_) => continue
+                        }
+                    } else if file_type.is_dir() {
+                        visit.push(entry.path())
+                    }
+                },
+                Err(_) => continue
             }
         }
     }
