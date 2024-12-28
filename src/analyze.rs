@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::io::Error;
 use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
+use std::time::Instant;
 
 use crate::structs::FileTypeData;
 use crate::utils::{humanize_bytes, walk_dir};
@@ -23,6 +24,8 @@ pub fn get_files_types(dir: PathBuf) -> HashMap<String, FileTypeData> {
 }
 
 pub fn analyze(dir: PathBuf) -> Result<(), Error> {  // TODO: Simplify
+    let start = Instant::now();
+
     let mut types_data: Vec<_> = get_files_types(dir).into_iter().collect();
     types_data.sort_by_key(|(_, data)| data.size);
     types_data.reverse();
@@ -66,10 +69,11 @@ pub fn analyze(dir: PathBuf) -> Result<(), Error> {  // TODO: Simplify
         );
     }
     println!(
-        "{separator}\nSummary: {:>size_width$} ({:>5} files)",
+        "{separator}\nSummary: {:>size_width$} ({:>5} files, time elapsed: {}ms)",
         humanize_bytes(total_size),
         total_files,
-        size_width = max_size_len
+        start.elapsed().as_millis(),
+        size_width = max_size_len,
     );
 
     Ok(())
