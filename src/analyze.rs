@@ -4,8 +4,13 @@ use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use crate::structs::FileTypeData;
 use crate::utils::{humanize_bytes, walk_dir};
+
+#[derive(Debug, Clone)]
+pub struct FileTypeData {
+    pub count: usize,
+    pub size: usize,
+}
 
 pub fn get_files_types(dir: PathBuf) -> HashMap<String, FileTypeData> {
     let mut types = HashMap::new();
@@ -23,41 +28,37 @@ pub fn get_files_types(dir: PathBuf) -> HashMap<String, FileTypeData> {
     types
 }
 
-pub fn analyze(dir: PathBuf) -> Result<(), Error> {  // TODO: Simplify
+pub fn analyze(dir: PathBuf) -> Result<(), Error> {
     let start = Instant::now();
+    let mut types_data = get_files_types(dir).into_iter().collect::<Vec<_>>();
 
-    let mut types_data: Vec<_> = get_files_types(dir).into_iter().collect();
-    types_data.sort_by_key(|(_, data)| data.size);
-    types_data.reverse();
+    types_data.sort_by_key(|(_, data)| std::cmp::Reverse(data.size));
 
-    let (total_files, total_size) = types_data
-        .iter()
-        .fold((0, 0), |(files, size), (_, data)| {
+    let (total_files, total_size) = types_data.iter().fold((0, 0), |(files, size), (_, data)| {
         (files + data.count, size + data.size)
     });
 
-    let max_ext_len = types_data
-        .iter()
-        .map(|(ext, _)| ext.len())
-        .max()
-        .unwrap_or(4);
-    let max_size_len = types_data
-        .iter()
-        .map(|(_, data)| humanize_bytes(data.size).len())
-        .max()
-        .unwrap_or(4);
+    let (max_ext_len, max_size_len) =
+        types_data
+            .iter()
+            .fold((4, 4), |(max_ext, max_size), (ext, data)| {
+                (
+                    max_ext.max(ext.len()),
+                    max_size.max(humanize_bytes(data.size).len()),
+                )
+            });
 
-    let header = format!(
-        "{:<ext_width$} {:>size_width$} {:>10}",
+    let separator = "-".repeat(max_ext_len + max_size_len + 14);
+
+    println!(
+        "{:<ext_width$} {:>size_width$} {:>10}\n{separator}",
         "Type",
         "Size",
         "Files",
         ext_width = max_ext_len,
         size_width = max_size_len
     );
-    let separator = "-".repeat(header.len());
 
-    println!("{header}\n{separator}");
     for (ext, data) in &types_data {
         println!(
             "{:<ext_width$} {:>size_width$} {:>10}",
@@ -68,12 +69,13 @@ pub fn analyze(dir: PathBuf) -> Result<(), Error> {  // TODO: Simplify
             size_width = max_size_len
         );
     }
+
     println!(
         "{separator}\nSummary: {:>size_width$} ({:>5} files, time elapsed: {}ms)",
         humanize_bytes(total_size),
         total_files,
         start.elapsed().as_millis(),
-        size_width = max_size_len,
+        size_width = max_size_len
     );
 
     Ok(())
