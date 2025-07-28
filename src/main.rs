@@ -9,10 +9,9 @@ mod utils;
 
 fn main() -> Result<(), Error> {
     let args: Vec<String> = args().collect();
-    let dir_path: PathBuf = if let Some(path) = args.get(1) {
-        path.parse().expect("Failed to parse")
-    } else {
-        current_dir()?
+    let dir_path: PathBuf = match args.get(1) {
+        Some(path) => path.parse().expect("Failed to parse"),
+        _ => current_dir()?,
     };
     println!("Directory: {}", dir_path.display());
     return analyze(dir_path);

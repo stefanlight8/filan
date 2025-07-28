@@ -18,7 +18,7 @@ pub fn get_files_types(dir: PathBuf) -> HashMap<String, FileTypeData> {
     for file in files {
         if let Some(file_type) = file.extension().and_then(|ext| ext.to_str()) {
             let entry = types
-                .entry(file_type.to_string())
+                .entry(file_type.to_string().to_lowercase())
                 .or_insert(FileTypeData { count: 0, size: 0 });
             entry.count += 1;
             entry.size += file.metadata().map(|m| m.size() as usize).unwrap_or(0);
@@ -31,6 +31,7 @@ pub fn get_files_types(dir: PathBuf) -> HashMap<String, FileTypeData> {
 pub fn analyze(dir: PathBuf) -> Result<(), Error> {
     let start = Instant::now();
     let mut types_data = get_files_types(dir).into_iter().collect::<Vec<_>>();
+    let time_elapsed = start.elapsed().as_millis();
 
     types_data.sort_by_key(|(_, data)| std::cmp::Reverse(data.size));
 
@@ -74,7 +75,7 @@ pub fn analyze(dir: PathBuf) -> Result<(), Error> {
         "{separator}\nSummary: {:>size_width$} ({:>5} files, time elapsed: {}ms)",
         humanize_bytes(total_size),
         total_files,
-        start.elapsed().as_millis(),
+        time_elapsed,
         size_width = max_size_len
     );
 
