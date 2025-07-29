@@ -2,3 +2,6 @@
 name = "filan"
 version = "0.1.1"
 edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.41", features = ["derive"] }

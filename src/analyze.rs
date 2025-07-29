@@ -1,9 +1,11 @@
+use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::io::Error;
 use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 use std::time::Instant;
 
+use crate::interface::SortField;
 use crate::utils::{humanize_bytes, walk_dir};
 
 #[derive(Debug, Clone)]
@@ -28,56 +30,82 @@ pub fn get_files_types(dir: PathBuf) -> HashMap<String, FileTypeData> {
     types
 }
 
-pub fn analyze(dir: PathBuf) -> Result<(), Error> {
+pub fn analyze(dir: PathBuf, sort_by: SortField, limit: usize) -> Result<(), Error> {
     let start = Instant::now();
-    let mut types_data = get_files_types(dir).into_iter().collect::<Vec<_>>();
-    let time_elapsed = start.elapsed().as_millis();
+    let mut file_types = get_files_types(dir).into_iter().collect::<Vec<_>>();
+    let time_elapsed = Instant::now() - start;
 
-    types_data.sort_by_key(|(_, data)| std::cmp::Reverse(data.size));
+    let mut total_file_count_all = 0;
+    let mut total_file_size_all = 0;
+    for (_, data) in &file_types {
+        total_file_count_all += data.count;
+        total_file_size_all += data.size;
+    }
 
-    let (total_files, total_size) = types_data.iter().fold((0, 0), |(files, size), (_, data)| {
-        (files + data.count, size + data.size)
-    });
+    match sort_by {
+        SortField::Name => file_types.sort_by_key(|(ext, _)| ext.clone()),
+        SortField::Count => file_types.sort_by_key(|(_, data)| Reverse(data.count)),
+        SortField::Size => file_types.sort_by_key(|(_, data)| Reverse(data.size)),
+    }
 
-    let (max_ext_len, max_size_len) =
-        types_data
-            .iter()
-            .fold((4, 4), |(max_ext, max_size), (ext, data)| {
-                (
-                    max_ext.max(ext.len()),
-                    max_size.max(humanize_bytes(data.size).len()),
-                )
-            });
+    if limit != 0 && limit < file_types.len() {
+        file_types.truncate(limit);
+    }
 
-    let separator = "-".repeat(max_ext_len + max_size_len + 14);
+    let mut total_file_count_shown = 0;
+    let mut total_file_size_shown = 0;
+    for (_, data) in &file_types {
+        total_file_count_shown += data.count;
+        total_file_size_shown += data.size;
+    }
+
+    let mut max_extension_width = 4;
+    let mut max_size_width = 4;
+
+    for (extension, data) in &file_types {
+        max_extension_width = max_extension_width.max(extension.len());
+        max_size_width = max_size_width.max(humanize_bytes(data.size).len());
+    }
+
+    let separator = "-".repeat(max_extension_width + max_size_width + 14);
 
     println!(
         "{:<ext_width$} {:>size_width$} {:>10}\n{separator}",
         "Type",
         "Size",
         "Files",
-        ext_width = max_ext_len,
-        size_width = max_size_len
+        ext_width = max_extension_width,
+        size_width = max_size_width
     );
 
-    for (ext, data) in &types_data {
+    for (extension, data) in &file_types {
         println!(
             "{:<ext_width$} {:>size_width$} {:>10}",
-            ext,
+            extension,
             humanize_bytes(data.size),
             data.count,
-            ext_width = max_ext_len,
-            size_width = max_size_len
+            ext_width = max_extension_width,
+            size_width = max_size_width
         );
     }
 
     println!(
-        "{separator}\nSummary: {:>size_width$} ({:>5} files, time elapsed: {}ms)",
-        humanize_bytes(total_size),
-        total_files,
-        time_elapsed,
-        size_width = max_size_len
+        "{separator}\nSummary shown: {:>size_width$} ({:>5} files)",
+        humanize_bytes(total_file_size_shown),
+        total_file_count_shown,
+        size_width = max_size_width
     );
+
+    if total_file_count_all != total_file_count_shown {
+        println!(
+            "Total analyzed: {:>size_width$} ({:>5} files)",
+            humanize_bytes(total_file_size_all),
+            total_file_count_all,
+            size_width = max_size_width
+        );
+    }
+
+    println!("Time elapsed: {}ms", time_elapsed.as_millis());
 
     Ok(())
 }

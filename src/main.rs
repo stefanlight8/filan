@@ -1,18 +1,17 @@
-use std::env::{args, current_dir};
-use std::io::Error;
-use std::path::PathBuf;
+use std::{env::current_dir, io::Error, path::PathBuf};
 
 use analyze::analyze;
+use clap::Parser;
+
+use crate::interface::Args;
 
 mod analyze;
+mod interface;
 mod utils;
 
 fn main() -> Result<(), Error> {
-    let args: Vec<String> = args().collect();
-    let dir_path: PathBuf = match args.get(1) {
-        Some(path) => path.parse().expect("Failed to parse"),
-        _ => current_dir()?,
-    };
-    println!("Directory: {}", dir_path.display());
-    return analyze(dir_path);
+    let args = Args::parse();
+    let target_dir: PathBuf = args.dir.unwrap_or(current_dir().unwrap());
+    println!("Directory: {}", &target_dir.display());
+    return analyze(target_dir, args.sort, args.limit);
 }
