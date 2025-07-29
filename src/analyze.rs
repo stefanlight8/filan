@@ -1,7 +1,6 @@
 use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::io::Error;
-use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -23,7 +22,7 @@ pub fn get_files_types(dir: PathBuf) -> HashMap<String, FileTypeData> {
                 .entry(file_type.to_string().to_lowercase())
                 .or_insert(FileTypeData { count: 0, size: 0 });
             entry.count += 1;
-            entry.size += file.metadata().map(|m| m.size() as usize).unwrap_or(0);
+            entry.size += file.metadata().map(|m| m.len() as usize).unwrap_or(0);
         }
     }
 
