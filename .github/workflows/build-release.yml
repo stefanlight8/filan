@@ -1,0 +1,81 @@
+name: Build for release
+
+on:
+  release:
+    types: [published]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build_and_upload:
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            rust_target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: i686-unknown-linux-gnu
+            rust_target: i686-unknown-linux-gnu
+            cross_compile_linux_32: true
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            rust_target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            rust_target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            rust_target: aarch64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          target: ${{ matrix.rust_target }}
+
+      - if: matrix.cross_compile_linux_32
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib build-essential
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.rust_target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.rust_target }}-cargo-
+
+      - run: cargo build --verbose --release --target ${{ matrix.target }}
+
+      - name: Set artifact name and path
+        id: set_artifact_name_path
+        shell: bash
+        run: |
+          BINARY_FULL_NAME="${{ github.event.repository.name }}"
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            BINARY_FULL_NAME="${BINARY_FULL_NAME}.exe"
+          fi
+          FULL_PATH="target/${{ matrix.target }}/release/${BINARY_FULL_NAME}"
+          echo "asset_name=${BINARY_FULL_NAME}" >> "$GITHUB_OUTPUT"
+          echo "asset_path=${FULL_PATH}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        if: github.event_name == 'release' && github.event.action == 'published'
+        with:
+          files: ${{ steps.set_artifact_name_path.outputs.asset_path }}
+          tag_name: ${{ github.event.release.tag_name }}
+          name: ${{ steps.set_artifact_name_path.outputs.asset_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,19 +1,33 @@
 use std::fs::{read_dir, read_link};
 use std::io::Error;
-use std::os::unix::fs::FileTypeExt;
 use std::path::PathBuf;
+
+#[cfg(unix)]
+use std::os::unix::fs::FileTypeExt;
+
+#[cfg(unix)]
+fn is_block_device(path: &PathBuf) -> bool {
+    path.metadata()
+        .map(|m| m.file_type().is_block_device())
+        .unwrap_or(false)
+}
+
+#[cfg(target_os = "windows")]
+fn is_block_device(_: &PathBuf) -> bool {
+    false
+}
 
 pub fn walk_dir(path: PathBuf) -> Result<Vec<PathBuf>, Error> {
     let mut files = vec![];
     let mut visit = vec![path];
     while let Some(mut path) = visit.pop() {
         if path.is_symlink() {
-            path = read_link(path)?;
-            if !path.exists() || !path.metadata()?.file_type().is_block_device() {
+            path = read_link(&path)?;
+            if !path.exists() || !is_block_device(&path) {
                 continue;
             }
-        };
-        for dir in read_dir(path)? {
+        }
+        for dir in read_dir(&path)? {
             match dir {
                 Ok(entry) => {
                     let file_type = entry.file_type()?;
