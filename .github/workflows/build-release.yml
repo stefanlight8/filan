@@ -10,8 +10,6 @@ env:
 jobs:
   build_and_upload:
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -26,9 +24,6 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             rust_target: x86_64-pc-windows-msvc
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            rust_target: x86_64-apple-darwin
           - os: macos-latest
             target: aarch64-apple-darwin
             rust_target: aarch64-apple-darwin
@@ -62,20 +57,25 @@ jobs:
         id: set_artifact_name_path
         shell: bash
         run: |
-          BINARY_FULL_NAME="${{ github.event.repository.name }}"
-          if [ "${{ runner.os }}" == "Windows" ]; then
-            BINARY_FULL_NAME="${BINARY_FULL_NAME}.exe"
+          REPO_NAME="${{ github.event.repository.name }}"
+          TARGET="${{ matrix.target }}"
+          FILE_EXTENSION=""
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            FILE_EXTENSION=".exe"
           fi
-          FULL_PATH="target/${{ matrix.target }}/release/${BINARY_FULL_NAME}"
-          echo "asset_name=${BINARY_FULL_NAME}" >> "$GITHUB_OUTPUT"
-          echo "asset_path=${FULL_PATH}" >> "$GITHUB_OUTPUT"
+          ASSET_DISPLAY_NAME="${REPO_NAME}-${TARGET}${FILE_EXTENSION}"
+          BINARY_ON_DISK_NAME="${REPO_NAME}${FILE_EXTENSION}"
+          FULL_PATH="target/${TARGET}/release/${BINARY_ON_DISK_NAME}"
+          echo "asset_display_name=${ASSET_DISPLAY_NAME}" >> "$GITHUB_OUTPUT"
+          echo "asset_full_path_on_disk=${FULL_PATH}" >> "$GITHUB_OUTPUT"
 
       - name: Upload Release Asset
-        uses: softprops/action-gh-release@v2
+        uses: actions/upload-release-asset@v1
         if: github.event_name == 'release' && github.event.action == 'published'
-        with:
-          files: ${{ steps.set_artifact_name_path.outputs.asset_path }}
-          tag_name: ${{ github.event.release.tag_name }}
-          name: ${{ steps.set_artifact_name_path.outputs.asset_name }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_ACCESS_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ${{ steps.set_artifact_name_path.outputs.asset_full_path_on_disk }}
+          asset_name: ${{ steps.set_artifact_name_path.outputs.asset_display_name }}
+          asset_content_type: application/octet-stream
